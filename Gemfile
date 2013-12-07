@@ -8,7 +8,7 @@ gemspec
 gem 'mocha', '~> 0.14', require: false
 
 gem 'rack-cache', '~> 1.2'
-gem 'bcrypt-ruby', '~> 3.1.0'
+gem 'bcrypt-ruby', '~> 3.1.2'
 gem 'jquery-rails', '~> 2.2.0'
 gem 'turbolinks'
 gem 'coffee-rails', '~> 4.0.0'
@@ -29,7 +29,7 @@ gem 'dalli', '>= 2.2.1'
 
 # Add your own local bundler stuff
 local_gemfile = File.dirname(__FILE__) + "/.Gemfile"
-instance_eval File.read local_gemfile if File.exists? local_gemfile
+instance_eval File.read local_gemfile if File.exist? local_gemfile
 
 group :test do
   platforms :mri_19 do
@@ -44,7 +44,6 @@ group :test do
 end
 
 platforms :ruby do
-  gem 'yajl-ruby'
   gem 'nokogiri', '>= 1.4.5'
 
   # Needed for compiling the ActionDispatch::Journey parser
@@ -61,13 +60,25 @@ platforms :ruby do
 end
 
 platforms :jruby do
-    git 'git://github.com/jruby/activerecord-jdbc-adapter.git' do
-      gem 'activerecord-jdbcsqlite3-adapter'
-      group :db do
-        gem 'activerecord-jdbcmysql-adapter'
-        gem 'activerecord-jdbcpostgresql-adapter'
-      end
+  gem 'json'
+  if ENV['AR_JDBC']
+    gem 'activerecord-jdbcsqlite3-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
+    group :db do
+      gem 'activerecord-jdbcmysql-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
+      gem 'activerecord-jdbcpostgresql-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
     end
+  else
+    gem 'activerecord-jdbcsqlite3-adapter', '>= 1.3.0'
+    group :db do
+      gem 'activerecord-jdbcmysql-adapter', '>= 1.3.0'
+      gem 'activerecord-jdbcpostgresql-adapter', '>= 1.3.0'
+    end
+  end
+end
+
+platforms :rbx do
+  gem 'psych', '~> 2.0'
+  gem 'rubysl', '~> 2.0'
 end
 
 # gems that are necessary for ActiveRecord tests with Oracle database

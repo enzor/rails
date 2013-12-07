@@ -10,7 +10,10 @@ module ActionView
 
     class << self
       def digest(name, format, finder, options = {})
-        cache_key = ([name, format] + Array.wrap(options[:dependencies])).join('.')
+        details_key = finder.details_key.hash
+        dependencies = Array.wrap(options[:dependencies])
+        cache_key = ([name, details_key, format] + dependencies).join('.')
+
         # this is a correctly done double-checked locking idiom
         # (ThreadSafe::Cache's lookups have volatile semantics)
         @@cache[cache_key] || @@digest_monitor.synchronize do
@@ -32,9 +35,13 @@ module ActionView
           Digestor
         end
 
-        @@cache[cache_key] = digest = klass.new(name, format, finder, options).digest # Store the actual digest
+        digest = klass.new(name, format, finder, options).digest
+        # Store the actual digest if config.cache_template_loading is true
+        @@cache[cache_key] = stored_digest = digest if ActionView::Resolver.caching?
+        digest
       ensure
-        @@cache.delete_pair(cache_key, false) if pre_stored && !digest # something went wrong, make sure not to corrupt the @@cache
+        # something went wrong or ActionView::Resolver.caching? is false, make sure not to corrupt the @@cache
+        @@cache.delete_pair(cache_key, false) if pre_stored && !stored_digest 
       end
     end
 

@@ -3,6 +3,8 @@ require 'arel/visitors/bind_visitor'
 module ActiveRecord
   module ConnectionAdapters
     class AbstractMysqlAdapter < AbstractAdapter
+      include Savepoints
+
       class SchemaCreation < AbstractAdapter::SchemaCreation
 
         def visit_AddColumn(o)
@@ -174,6 +176,7 @@ module ActiveRecord
         @quoted_column_names, @quoted_table_names = {}, {}
 
         if self.class.type_cast_config_to_boolean(config.fetch(:prepared_statements) { true })
+          @prepared_statements = true
           @visitor = Arel::Visitors::MySQL.new self
         else
           @visitor = unprepared_visitor
@@ -193,11 +196,6 @@ module ActiveRecord
         true
       end
 
-      # Returns true, since this connection adapter supports savepoints.
-      def supports_savepoints?
-        true
-      end
-
       def supports_bulk_alter? #:nodoc:
         true
       end
@@ -206,6 +204,17 @@ module ActiveRecord
       # but at the moment (5.5) it doesn't yet implement them
       def supports_index_sort_order?
         true
+      end
+
+      def type_cast(value, column)
+        case value
+        when TrueClass
+          1
+        when FalseClass
+          0
+        else
+          super
+        end
       end
 
       # MySQL 4 technically support transaction isolation, but it is affected by a bug
@@ -274,7 +283,7 @@ module ActiveRecord
 
       # REFERENTIAL INTEGRITY ====================================
 
-      def disable_referential_integrity(&block) #:nodoc:
+      def disable_referential_integrity #:nodoc:
         old = select_value("SELECT @@FOREIGN_KEY_CHECKS")
 
         begin
@@ -316,39 +325,19 @@ module ActiveRecord
 
       def begin_db_transaction
         execute "BEGIN"
-      rescue
-        # Transactions aren't supported
       end
 
       def begin_isolated_db_transaction(isolation)
         execute "SET TRANSACTION ISOLATION LEVEL #{transaction_isolation_levels.fetch(isolation)}"
         begin_db_transaction
-      rescue
-        # Transactions aren't supported
       end
 
       def commit_db_transaction #:nodoc:
         execute "COMMIT"
-      rescue
-        # Transactions aren't supported
       end
 
       def rollback_db_transaction #:nodoc:
         execute "ROLLBACK"
-      rescue
-        # Transactions aren't supported
-      end
-
-      def create_savepoint
-        execute("SAVEPOINT #{current_savepoint_name}")
-      end
-
-      def rollback_to_savepoint
-        execute("ROLLBACK TO SAVEPOINT #{current_savepoint_name}")
-      end
-
-      def release_savepoint
-        execute("RELEASE SAVEPOINT #{current_savepoint_name}")
       end
 
       # In the simple case, MySQL allows us to place JOINs directly into the UPDATE
@@ -501,6 +490,14 @@ module ActiveRecord
       def rename_table(table_name, new_name)
         execute "RENAME TABLE #{quote_table_name(table_name)} TO #{quote_table_name(new_name)}"
         rename_table_indexes(table_name, new_name)
+      end
+
+      def rename_index(table_name, old_name, new_name)
+        if (version[0] == 5 && version[1] >= 7) || version[0] >= 6
+          execute "ALTER TABLE #{quote_table_name(table_name)} RENAME INDEX #{quote_table_name(old_name)} TO #{quote_table_name(new_name)}"
+        else
+          super
+        end
       end
 
       def change_column_default(table_name, column_name, default)

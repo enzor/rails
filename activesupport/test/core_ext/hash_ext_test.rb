@@ -624,10 +624,15 @@ class HashExtTest < ActiveSupport::TestCase
       { :failure => "stuff", :funny => "business" }.assert_valid_keys(:failure, :funny)
     end
 
-    assert_raise(ArgumentError, "Unknown key: failore") do
+    exception = assert_raise ArgumentError do
       { :failore => "stuff", :funny => "business" }.assert_valid_keys([ :failure, :funny ])
+    end
+    assert_equal "Unknown key: :failore. Valid keys are: :failure, :funny", exception.message
+
+    exception = assert_raise ArgumentError do
       { :failore => "stuff", :funny => "business" }.assert_valid_keys(:failure, :funny)
     end
+    assert_equal "Unknown key: :failore. Valid keys are: :failure, :funny", exception.message
   end
 
   def test_assorted_keys_not_stringified
@@ -779,6 +784,24 @@ class HashExtTest < ActiveSupport::TestCase
 
     assert_equal 'bender', slice[:login]
     assert_equal 'bender', slice['login']
+  end
+
+  def test_slice_bang_does_not_override_default
+    hash = Hash.new(0)
+    hash.update(a: 1, b: 2)
+
+    hash.slice!(:a)
+
+    assert_equal 0, hash[:c]
+  end
+
+  def test_slice_bang_does_not_override_default_proc
+    hash = Hash.new { |h, k| h[k] = [] }
+    hash.update(a: 1, b: 2)
+
+    hash.slice!(:a)
+
+    assert_equal [], hash[:c]
   end
 
   def test_extract

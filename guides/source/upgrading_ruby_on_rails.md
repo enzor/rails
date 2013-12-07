@@ -22,6 +22,102 @@ Rails generally stays close to the latest released Ruby version when it's releas
 
 TIP: Ruby 1.8.7 p248 and p249 have marshaling bugs that crash Rails. Ruby Enterprise Edition has these fixed since the release of 1.8.7-2010.02. On the 1.9 front, Ruby 1.9.1 is not usable because it outright segfaults, so if you want to use 1.9.x, jump straight to 1.9.3 for smooth sailing.
 
+Upgrading from Rails 4.0 to Rails 4.1
+-------------------------------------
+
+NOTE: This section is a work in progress.
+
+### Spring
+
+If you want to use Spring as your application preloader you need to:
+
+1. Add `gem 'spring', group: :development` to your `Gemfile`.
+2. Install spring using `bundle install`.
+3. Springify your binstubs with `bundle exec spring binstub --all`.
+
+NOTE: User defined rake tasks will run in the `development` environment by
+default. If you want them to run in other environments consult the
+[Spring README](https://github.com/jonleighton/spring#rake).
+
+### Changes in JSON handling
+
+The are a few major changes related to JSON handling in Rails 4.1.
+
+#### MultiJSON removal
+
+MultiJSON has reached its [end-of-life](https://github.com/rails/rails/pull/10576)
+and has been removed from Rails.
+
+If your application currently depend on MultiJSON directly, you have a few options:
+
+1. Add 'multi_json' to your Gemfile. Note that this might cease to work in the future
+
+2. Migrate away from MultiJSON by using `obj.to_json`, and `JSON.parse(str)` instead.
+
+WARNING: Do not simply replace `MultiJson.dump` and `MultiJson.load` with
+`JSON.dump` and `JSON.load`. These JSON gem APIs are meant for serializing and
+deserializing arbitrary Ruby objects and are generally [unsafe](http://www.ruby-doc.org/stdlib-2.0.0/libdoc/json/rdoc/JSON.html#method-i-load).
+
+#### JSON gem compatibility
+
+Historically, Rails had some compatibility issues with the JSON gem. Using
+`JSON.generate` and `JSON.dump` inside a Rails application could produce
+unexpected errors.
+
+Rails 4.1 fixed these issues by isolating its own encoder from the JSON gem. The
+JSON gem APIs will function as normal, but they will not have access to any
+Rails-specific features. For example:
+
+```ruby
+class FooBar
+  def as_json(options = nil)
+    { foo: "bar" }
+  end
+end
+
+>> FooBar.new.to_json # => "{\"foo\":\"bar\"}"
+>> JSON.generate(FooBar.new, quirks_mode: true) # => "\"#<FooBar:0x007fa80a481610>\""
+```
+
+#### New JSON encoder
+
+The JSON encoder in Rails 4.1 has been rewritten to take advantage of the JSON
+gem. For most applications, this should be a transparent change. However, as
+part of the rewrite, the following features have been removed from the encoder:
+
+1. Circular data structure detection
+2. Support for the `encode_json` hook
+3. Option to encode `BigDecimal` objects as numbers instead of strings
+
+If you application depends on one of these features, you can get them back by
+adding the [`activesupport-json_encoder`](https://github.com/rails/activesupport-json_encoder)
+gem to your Gemfile.
+
+### Methods defined in Active Record fixtures
+
+Rails 4.1 evaluates each fixture's ERB in a separate context, so helper methods
+defined in a fixture will not be available in other fixtures.
+
+Helper methods that are used in multiple fixtures should be defined on modules
+included in the newly introduced `ActiveRecord::FixtureSet.context_class`, in
+`test_helper.rb`.
+
+```ruby
+class FixtureFileHelpers
+  def file_sha(path)
+    Digest::SHA2.hexdigest(File.read(Rails.root.join('test/fixtures', path)))
+  end
+end
+ActiveRecord::FixtureSet.context_class.send :include, FixtureFileHelpers
+```
+
+Upgrading from Rails 3.2 to Rails 4.0
+-------------------------------------
+
+If your application is currently on any version of Rails older than 3.2.x, you should upgrade to Rails 3.2 before attempting one to Rails 4.0.
+
+The following changes are meant for upgrading your application to Rails 4.0.
+
 ### HTTP PATCH
 
 Rails 4 now uses `PATCH` as the primary HTTP verb for updates when a RESTful
@@ -120,15 +216,6 @@ Ruby libraries yet. Aaron Patterson's
 [hana](https://github.com/tenderlove/hana) is one such gem, but doesn't have
 full support for the last few changes in the specification.
 
-Upgrading from Rails 3.2 to Rails 4.0
--------------------------------------
-
-NOTE: This section is a work in progress.
-
-If your application is currently on any version of Rails older than 3.2.x, you should upgrade to Rails 3.2 before attempting one to Rails 4.0.
-
-The following changes are meant for upgrading your application to Rails 4.0.
-
 ### Gemfile
 
 Rails 4.0 removed the `assets` group from Gemfile. You'd need to remove that
@@ -170,7 +257,26 @@ this gem such as `whitelist_attributes` or `mass_assignment_sanitizer` options.
 ```
 
 * Rails 4.0 has deprecated `ActiveRecord::Fixtures` in favor of `ActiveRecord::FixtureSet`.
+
 * Rails 4.0 has deprecated `ActiveRecord::TestCase` in favor of `ActiveSupport::TestCase`.
+
+* Rails 4.0 has deprecated the old-style hash based finder API. This means that
+  methods which previously accepted "finder options" no longer do.
+
+* All dynamic methods except for `find_by_...` and `find_by_...!` are deprecated.
+  Here's how you can handle the changes:
+
+      * `find_all_by_...`           becomes `where(...)`.
+      * `find_last_by_...`          becomes `where(...).last`.
+      * `scoped_by_...`             becomes `where(...)`.
+      * `find_or_initialize_by_...` becomes `find_or_initialize_by(...)`.
+      * `find_or_create_by_...`     becomes `find_or_create_by(...)`.
+
+* Note that `where(...)` returns a relation, not an array like the old finders. If you require an `Array`, use `where(...).to_a`.
+
+* These equivalent methods may not execute the same SQL as the previous implementation.
+
+* To re-enable the old finders, you can use the [activerecord-deprecated_finders gem](https://github.com/rails/activerecord-deprecated_finders).
 
 ### Active Resource
 
@@ -327,18 +433,19 @@ Upgrading from Rails 3.1 to Rails 3.2
 
 If your application is currently on any version of Rails older than 3.1.x, you should upgrade to Rails 3.1 before attempting an update to Rails 3.2.
 
-The following changes are meant for upgrading your application to Rails 3.2.12, the latest 3.2.x version of Rails.
+The following changes are meant for upgrading your application to Rails 3.2.16,
+the last 3.2.x version of Rails.
 
 ### Gemfile
 
 Make the following changes to your `Gemfile`.
 
 ```ruby
-gem 'rails', '= 3.2.12'
+gem 'rails', '3.2.16'
 
 group :assets do
-  gem 'sass-rails',   '~> 3.2.3'
-  gem 'coffee-rails', '~> 3.2.1'
+  gem 'sass-rails',   '~> 3.2.6'
+  gem 'coffee-rails', '~> 3.2.2'
   gem 'uglifier',     '>= 1.0.3'
 end
 ```
@@ -374,21 +481,21 @@ Upgrading from Rails 3.0 to Rails 3.1
 
 If your application is currently on any version of Rails older than 3.0.x, you should upgrade to Rails 3.0 before attempting an update to Rails 3.1.
 
-The following changes are meant for upgrading your application to Rails 3.1.11, the latest 3.1.x version of Rails.
+The following changes are meant for upgrading your application to Rails 3.1.12, the last 3.1.x version of Rails.
 
 ### Gemfile
 
 Make the following changes to your `Gemfile`.
 
 ```ruby
-gem 'rails', '= 3.1.11'
+gem 'rails', '3.1.12'
 gem 'mysql2'
 
 # Needed for the new asset pipeline
 group :assets do
-  gem 'sass-rails',   "~> 3.1.5"
-  gem 'coffee-rails', "~> 3.1.1"
-  gem 'uglifier',     ">= 1.0.3"
+  gem 'sass-rails',   '~> 3.1.7'
+  gem 'coffee-rails', '~> 3.1.1'
+  gem 'uglifier',     '>= 1.0.3'
 end
 
 # jQuery is the default JavaScript library in Rails 3.1

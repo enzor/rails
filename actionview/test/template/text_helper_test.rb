@@ -21,6 +21,11 @@ class TextHelperTest < ActionView::TestCase
     assert simple_format("<b> test with html tags </b>").html_safe?
   end
 
+  def test_simple_format_included_in_isolation
+    helper_klass = Class.new { include ActionView::Helpers::TextHelper }
+    assert helper_klass.new.simple_format("<b> test with html tags </b>").html_safe?
+  end
+
   def test_simple_format
     assert_equal "<p></p>", simple_format(nil)
 
@@ -40,6 +45,11 @@ class TextHelperTest < ActionView::TestCase
 
   def test_simple_format_should_sanitize_input_when_sanitize_option_is_not_false
     assert_equal "<p><b> test with unsafe string </b></p>", simple_format("<b> test with unsafe string </b><script>code!</script>")
+  end
+
+  def test_simple_format_should_sanitize_input_when_sanitize_option_is_true
+    assert_equal '<p><b> test with unsafe string </b></p>',
+      simple_format('<b> test with unsafe string </b><script>code!</script>', {}, sanitize: true)
   end
 
   def test_simple_format_should_not_sanitize_input_when_sanitize_option_is_false
@@ -314,6 +324,9 @@ class TextHelperTest < ActionView::TestCase
 
     options = { :separator => "\n", :radius => 1 }
     assert_equal("...very\nvery long\nstring", excerpt("my very\nvery\nvery long\nstring", 'long', options))
+
+    assert_equal excerpt('This is a beautiful morning', 'a'),
+                 excerpt('This is a beautiful morning', 'a', separator: nil)
   end
 
   def test_word_wrap
@@ -371,6 +384,13 @@ class TextHelperTest < ActionView::TestCase
     assert_equal("one", cycle("one", 2, "3"))
     assert_equal("2", cycle("one", 2, "3"))
     assert_equal("3", cycle("one", 2, "3"))
+  end
+
+  def test_cycle_with_array
+    array = [1, 2, 3]
+    assert_equal("1", cycle(array))
+    assert_equal("2", cycle(array))
+    assert_equal("3", cycle(array))
   end
 
   def test_cycle_with_no_arguments
@@ -447,7 +467,7 @@ class TextHelperTest < ActionView::TestCase
     reset_cycle("colors")
   end
 
-  def test_recet_named_cycle
+  def test_reset_named_cycle
     assert_equal("1", cycle(1, 2, 3, :name => "numbers"))
     assert_equal("red", cycle("red", "blue", :name => "colors"))
     reset_cycle("numbers")

@@ -103,7 +103,7 @@ module ActionView
         }.join("\n").html_safe
       end
 
-      # Returns a link tag that browsers and news readers can use to auto-detect
+      # Returns a link tag that browsers and feed readers can use to auto-detect
       # an RSS or Atom feed. The +type+ can either be <tt>:rss</tt> (default) or
       # <tt>:atom</tt>. Control the link options in url_for format using the
       # +url_options+. You can modify the LINK tag itself in +tag_options+.
@@ -153,14 +153,14 @@ module ActionView
       #
       # ==== Examples
       #
-      #   favicon_link_tag '/myicon.ico'
+      #   favicon_link_tag 'myicon.ico'
       #   # => <link href="/assets/myicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
       #
       # Mobile Safari looks for a different <link> tag, pointing to an image that
       # will be used if you add the page to the home screen of an iPod Touch, iPhone, or iPad.
       # The following call would generate such a tag:
       #
-      #   favicon_link_tag '/mb-icon.png', rel: 'apple-touch-icon', type: 'image/png'
+      #   favicon_link_tag 'mb-icon.png', rel: 'apple-touch-icon', type: 'image/png'
       #   # => <link href="/assets/mb-icon.png" rel="apple-touch-icon" type="image/png" />
       def favicon_link_tag(source='favicon.ico', options={})
         tag('link', {
@@ -208,8 +208,11 @@ module ActionView
         end
 
         if size = options.delete(:size)
-          options[:width], options[:height] = size.split("x") if size =~ %r{\A\d+x\d+\z}
-          options[:width] = options[:height] = size if size =~ %r{\A\d+\z}
+          if size =~ %r{\A\d+x\d+\z}
+            options[:width], options[:height] = size.split('x')
+          elsif size =~ %r{\A\d+\z}
+            options[:width] = options[:height] = size
+          end
         end
 
         tag("img", options)
@@ -224,14 +227,14 @@ module ActionView
       #
       # ==== Examples
       #
-      #   image_tag('rails.png')
-      #   # => <img alt="Rails" src="/assets/rails.png" />
+      #   image_alt('rails.png')
+      #   # => Rails
       #
-      #   image_tag('hyphenated-file-name.png')
-      #   # => <img alt="Hyphenated file name" src="/assets/hyphenated-file-name.png" />
+      #   image_alt('hyphenated-file-name.png')
+      #   # => Hyphenated file name
       #
-      #   image_tag('underscored_file_name.png')
-      #   # => <img alt="Underscored file name" src="/assets/underscored_file_name.png" />
+      #   image_alt('underscored_file_name.png')
+      #   # => Underscored file name
       def image_alt(src)
         File.basename(src, '.*').sub(/-[[:xdigit:]]{32}\z/, '').tr('-_', ' ').capitalize
       end

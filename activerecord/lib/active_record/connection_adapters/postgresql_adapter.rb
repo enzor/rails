@@ -49,13 +49,17 @@ module ActiveRecord
       # Instantiates a new PostgreSQL column definition in a table.
       def initialize(name, default, oid_type, sql_type = nil, null = true)
         @oid_type = oid_type
+        default_value     = self.class.extract_value_from_default(default)
+
         if sql_type =~ /\[\]$/
           @array = true
-          super(name, self.class.extract_value_from_default(default), sql_type[0..sql_type.length - 3], null)
+          super(name, default_value, sql_type[0..sql_type.length - 3], null)
         else
           @array = false
-          super(name, self.class.extract_value_from_default(default), sql_type, null)
+          super(name, default_value, sql_type, null)
         end
+
+        @default_function = default if has_default_function?(default_value, default)
       end
 
       # :stopdoc:
@@ -144,7 +148,15 @@ module ActiveRecord
         @oid_type.type_cast value
       end
 
+      def accessor
+        @oid_type.accessor
+      end
+
       private
+
+        def has_default_function?(default_value, default)
+          !default_value && (%r{\w+\(.*\)} === default)
+        end
 
         def extract_limit(sql_type)
           case sql_type
@@ -428,6 +440,7 @@ module ActiveRecord
       include ReferentialIntegrity
       include SchemaStatements
       include DatabaseStatements
+      include Savepoints
 
       # Returns 'PostgreSQL' as adapter name for identification purposes.
       def adapter_name
@@ -439,6 +452,7 @@ module ActiveRecord
       def prepare_column_options(column, types)
         spec = super
         spec[:array] = 'true' if column.respond_to?(:array) && column.array
+        spec[:default] = "\"#{column.default_function}\"" if column.default_function
         spec
       end
 
@@ -531,6 +545,7 @@ module ActiveRecord
         super(connection, logger)
 
         if self.class.type_cast_config_to_boolean(config.fetch(:prepared_statements) { true })
+          @prepared_statements = true
           @visitor = Arel::Visitors::PostgreSQL.new self
         else
           @visitor = unprepared_visitor
@@ -550,7 +565,8 @@ module ActiveRecord
           raise "Your version of PostgreSQL (#{postgresql_version}) is too old, please upgrade!"
         end
 
-        initialize_type_map
+        @type_map = OID::TypeMap.new
+        initialize_type_map(type_map)
         @local_tz = execute('SHOW TIME ZONE', 'SCHEMA').first["TimeZone"]
         @use_insert_returning = @config.key?(:insert_returning) ? self.class.type_cast_config_to_boolean(@config[:insert_returning]) : true
       end
@@ -616,12 +632,6 @@ module ActiveRecord
         true
       end
 
-      # Returns true, since this connection adapter supports savepoints.
-      def supports_savepoints?
-        true
-      end
-
-      # Returns true.
       def supports_explain?
         true
       end
@@ -729,65 +739,85 @@ module ActiveRecord
 
       private
 
-        def reload_type_map
-          OID::TYPE_MAP.clear
-          initialize_type_map
+        def type_map
+          @type_map
         end
 
-        def initialize_type_map
+        def reload_type_map
+          type_map.clear
+          initialize_type_map(type_map)
+        end
+
+        def add_oid(row, records_by_oid, type_map)
+          return type_map if type_map.key? row['type_elem'].to_i
+
+          if OID.registered_type? row['typname']
+            # this composite type is explicitly registered
+            vector = OID::NAMES[row['typname']]
+          else
+            # use the default for composite types
+            unless type_map.key? row['typelem'].to_i
+              add_oid records_by_oid[row['typelem']], records_by_oid, type_map
+            end
+
+            vector = OID::Vector.new row['typdelim'], type_map[row['typelem'].to_i]
+          end
+
+          type_map[row['oid'].to_i] = vector
+          type_map
+        end
+
+        def initialize_type_map(type_map)
           result = execute('SELECT oid, typname, typelem, typdelim, typinput FROM pg_type', 'SCHEMA')
           leaves, nodes = result.partition { |row| row['typelem'] == '0' }
 
           # populate the leaf nodes
           leaves.find_all { |row| OID.registered_type? row['typname'] }.each do |row|
-            OID::TYPE_MAP[row['oid'].to_i] = OID::NAMES[row['typname']]
+            type_map[row['oid'].to_i] = OID::NAMES[row['typname']]
           end
+
+          records_by_oid = result.group_by { |row| row['oid'] }
 
           arrays, nodes = nodes.partition { |row| row['typinput'] == 'array_in' }
 
           # populate composite types
-          nodes.find_all { |row| OID::TYPE_MAP.key? row['typelem'].to_i }.each do |row|
-            if OID.registered_type? row['typname']
-              # this composite type is explicitly registered
-              vector = OID::NAMES[row['typname']]
-            else
-              # use the default for composite types
-              vector = OID::Vector.new row['typdelim'], OID::TYPE_MAP[row['typelem'].to_i]
-            end
-
-            OID::TYPE_MAP[row['oid'].to_i] = vector
+          nodes.each do |row|
+            add_oid row, records_by_oid, type_map
           end
 
           # populate array types
-          arrays.find_all { |row| OID::TYPE_MAP.key? row['typelem'].to_i }.each do |row|
-            array = OID::Array.new  OID::TYPE_MAP[row['typelem'].to_i]
-            OID::TYPE_MAP[row['oid'].to_i] = array
+          arrays.find_all { |row| type_map.key? row['typelem'].to_i }.each do |row|
+            array = OID::Array.new  type_map[row['typelem'].to_i]
+            type_map[row['oid'].to_i] = array
           end
         end
 
         FEATURE_NOT_SUPPORTED = "0A000" # :nodoc:
 
-        def exec_no_cache(sql, binds)
-          @connection.async_exec(sql)
+        def exec_no_cache(sql, name, binds)
+          log(sql, name, binds) { @connection.async_exec(sql) }
         end
 
-        def exec_cache(sql, binds)
+        def exec_cache(sql, name, binds)
           stmt_key = prepare_statement(sql)
+          type_casted_binds = binds.map { |col, val|
+            [col, type_cast(val, col)]
+          }
 
-          # Clear the queue
-          @connection.get_last_result
-          @connection.send_query_prepared(stmt_key, binds.map { |col, val|
-            type_cast(val, col)
-          })
-          @connection.block
-          @connection.get_last_result
-        rescue PGError => e
+          log(sql, name, type_casted_binds, stmt_key) do
+            @connection.send_query_prepared(stmt_key, type_casted_binds.map { |_, val| val })
+            @connection.block
+            @connection.get_last_result
+          end
+        rescue ActiveRecord::StatementInvalid => e
+          pgerror = e.original_exception
+
           # Get the PG code for the failure.  Annoyingly, the code for
           # prepared statements whose return value may have changed is
           # FEATURE_NOT_SUPPORTED.  Check here for more details:
           # http://git.postgresql.org/gitweb/?p=postgresql.git;a=blob;f=src/backend/utils/cache/plancache.c#l573
           begin
-            code = e.result.result_error_field(PGresult::PG_DIAG_SQLSTATE)
+            code = pgerror.result.result_error_field(PGresult::PG_DIAG_SQLSTATE)
           rescue
             raise e
           end
@@ -812,6 +842,8 @@ module ActiveRecord
           unless @statements.key? sql_key
             nextkey = @statements.next_key
             @connection.prepare nextkey, sql
+            # Clear the queue
+            @connection.get_last_result
             @statements[sql_key] = nextkey
           end
           @statements[sql_key]

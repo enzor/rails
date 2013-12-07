@@ -46,7 +46,7 @@ module ActiveRecord
         end
 
         # Create a new PostgreSQL database. Options include <tt>:owner</tt>, <tt>:template</tt>,
-        # <tt>:encoding</tt>, <tt>:collation</tt>, <tt>:ctype</tt>,
+        # <tt>:encoding</tt> (defaults to utf8), <tt>:collation</tt>, <tt>:ctype</tt>,
         # <tt>:tablespace</tt>, and <tt>:connection_limit</tt> (note that MySQL uses
         # <tt>:charset</tt> while PostgreSQL uses <tt>:encoding</tt>).
         #
@@ -172,7 +172,7 @@ module ActiveRecord
         def columns(table_name)
           # Limit, precision, and scale are all handled by the superclass.
           column_definitions(table_name).map do |column_name, type, default, notnull, oid, fmod|
-            oid = OID::TYPE_MAP.fetch(oid.to_i, fmod.to_i) {
+            oid = type_map.fetch(oid.to_i, fmod.to_i) {
               OID::Identity.new
             }
             PostgreSQLColumn.new(column_name, default, oid, type, notnull == 'f')

@@ -32,6 +32,7 @@ module ActiveRecord
 
       def insert_record(record, validate = true, raise = false)
         set_owner_attributes(record)
+        set_inverse_instance(record)
 
         if raise
           record.save!(:validate => validate)
@@ -107,7 +108,7 @@ module ActiveRecord
         # Deletes the records according to the <tt>:dependent</tt> option.
         def delete_records(records, method)
           if method == :destroy
-            records.each { |r| r.destroy }
+            records.each(&:destroy!)
             update_counter(-records.length) unless inverse_updates_counter_cache?
           else
             if records == :all
@@ -125,7 +126,11 @@ module ActiveRecord
         end
 
         def foreign_key_present?
-          owner.attribute_present?(reflection.association_primary_key)
+          if reflection.klass.primary_key
+            owner.attribute_present?(reflection.association_primary_key)
+          else
+            false
+          end
         end
     end
   end

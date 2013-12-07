@@ -35,11 +35,11 @@ class User < ActiveRecord::Base
   before_validation :ensure_login_has_a_value
 
   protected
-  def ensure_login_has_a_value
-    if login.nil?
-      self.login = email unless email.blank?
+    def ensure_login_has_a_value
+      if login.nil?
+        self.login = email unless email.blank?
+      end
     end
-  end
 end
 ```
 
@@ -65,13 +65,13 @@ class User < ActiveRecord::Base
   after_validation :set_location, on: [ :create, :update ]
 
   protected
-  def normalize_name
-    self.name = self.name.downcase.titleize
-  end
+    def normalize_name
+      self.name = self.name.downcase.titleize
+    end
 
-  def set_location
-    self.location = LocationService.query(self)
-  end
+    def set_location
+      self.location = LocationService.query(self)
+    end
 end
 ```
 
@@ -180,7 +180,7 @@ NOTE: The `find_by_*` and `find_by_*!` methods are dynamic finders generated aut
 Skipping Callbacks
 ------------------
 
-Just as with validations, it is also possible to skip callbacks. These methods should be used with caution, however, because important business rules and application logic may be kept in callbacks. Bypassing them without understanding the potential implications may lead to invalid data.
+Just as with validations, it is also possible to skip callbacks by using the following methods:
 
 * `decrement`
 * `decrement_counter`
@@ -195,6 +195,8 @@ Just as with validations, it is also possible to skip callbacks. These methods s
 * `update_all`
 * `update_counters`
 
+These methods should be used with caution, however, because important business rules and application logic may be kept in callbacks. Bypassing them without understanding the potential implications may lead to invalid data.
+
 Halting Execution
 -----------------
 
@@ -202,7 +204,7 @@ As you start registering new callbacks for your models, they will be queued for 
 
 The whole callback chain is wrapped in a transaction. If any _before_ callback method returns exactly `false` or raises an exception, the execution chain gets halted and a ROLLBACK is issued; _after_ callbacks can only accomplish that by raising an exception.
 
-WARNING. Raising an arbitrary exception may break code that expects `save` and its friends not to fail like that. The `ActiveRecord::Rollback` exception is thought precisely to tell Active Record a rollback is going on. That one is internally captured but not reraised.
+WARNING. Any exception that is not `ActiveRecord::Rollback` will be re-raised by Rails after the callback chain is halted. Raising an exception other than `ActiveRecord::Rollback` may break code that does not expect methods like `save` and `update_attributes` (which normally try to return `true` or `false`) to raise an exception.
 
 Relational Callbacks
 --------------------
@@ -288,7 +290,7 @@ Here's an example where we create a class with an `after_destroy` callback for a
 ```ruby
 class PictureFileCallbacks
   def after_destroy(picture_file)
-    if File.exists?(picture_file.filepath)
+    if File.exist?(picture_file.filepath)
       File.delete(picture_file.filepath)
     end
   end
@@ -308,7 +310,7 @@ Note that we needed to instantiate a new `PictureFileCallbacks` object, since we
 ```ruby
 class PictureFileCallbacks
   def self.after_destroy(picture_file)
-    if File.exists?(picture_file.filepath)
+    if File.exist?(picture_file.filepath)
       File.delete(picture_file.filepath)
     end
   end
@@ -356,4 +358,4 @@ end
 NOTE: the `:on` option specifies when a callback will be fired. If you
 don't supply the `:on` option the callback will fire for every action.
 
-The `after_commit` and `after_rollback` callbacks are guaranteed to be called for all models created, updated, or destroyed within a transaction block. If any exceptions are raised within one of these callbacks, they will be ignored so that they don't interfere with the other callbacks. As such, if your callback code could raise an exception, you'll need to rescue it and handle it appropriately within the callback.
+WARNING. The `after_commit` and `after_rollback` callbacks are guaranteed to be called for all models created, updated, or destroyed within a transaction block. If any exceptions are raised within one of these callbacks, they will be ignored so that they don't interfere with the other callbacks. As such, if your callback code could raise an exception, you'll need to rescue it and handle it appropriately within the callback.

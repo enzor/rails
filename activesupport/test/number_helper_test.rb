@@ -102,7 +102,6 @@ module ActiveSupport
           assert_equal '12 345 678', number_helper.number_to_delimited(12345678, :delimiter => ' ')
           assert_equal '12,345,678-05', number_helper.number_to_delimited(12345678.05, :separator => '-')
           assert_equal '12.345.678,05', number_helper.number_to_delimited(12345678.05, :separator => ',', :delimiter => '.')
-          assert_equal '12.345.678,05', number_helper.number_to_delimited(12345678.05, :delimiter => '.', :separator => ',')
         end
       end
 
@@ -370,12 +369,6 @@ module ActiveSupport
         end
       end
 
-      def test_extending_or_including_number_helper_correctly_hides_private_methods
-        [@instance_with_helpers, TestClassWithClassNumberHelpers, ActiveSupport::NumberHelper].each do |number_helper|
-          assert !number_helper.respond_to?(:valid_float?)
-          assert number_helper.respond_to?(:valid_float?, true)
-        end
-      end
     end
   end
 end

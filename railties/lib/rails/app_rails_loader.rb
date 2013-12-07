@@ -49,13 +49,13 @@ EOS
         # call to generate a new application, so restore the original cwd.
         Dir.chdir(original_cwd) and return if Pathname.new(Dir.pwd).root?
 
-        # Otherwise keep moving upwards in search of a executable.
+        # Otherwise keep moving upwards in search of an executable.
         Dir.chdir('..')
       end
     end
 
     def self.find_executable
-      EXECUTABLES.find { |exe| File.exists?(exe) }
+      EXECUTABLES.find { |exe| File.exist?(exe) }
     end
   end
 end

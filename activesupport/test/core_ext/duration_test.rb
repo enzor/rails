@@ -27,6 +27,7 @@ class DurationTest < ActiveSupport::TestCase
   def test_equals
     assert 1.day == 1.day
     assert 1.day == 1.day.to_i
+    assert 1.day.to_i == 1.day
     assert !(1.day == 'foo')
   end
 
@@ -37,6 +38,8 @@ class DurationTest < ActiveSupport::TestCase
     assert_equal '6 months and -2 days',            (6.months - 2.days).inspect
     assert_equal '10 seconds',                      10.seconds.inspect
     assert_equal '10 years, 2 months, and 1 day',   (10.years + 2.months + 1.day).inspect
+    assert_equal '10 years, 2 months, and 1 day',   (10.years + 1.month  + 1.day + 1.month).inspect
+    assert_equal '10 years, 2 months, and 1 day',   (1.day + 10.years + 2.months).inspect
     assert_equal '7 days',                          1.week.inspect
     assert_equal '14 days',                         1.fortnight.inspect
   end
@@ -68,6 +71,19 @@ class DurationTest < ActiveSupport::TestCase
     assert_equal 86400 * 1.7, 1.7.days
   end
 
+  def test_since_and_ago
+    t = Time.local(2000)
+    assert t + 1, 1.second.since(t)
+    assert t - 1, 1.second.ago(t)
+  end
+
+  def test_since_and_ago_without_argument
+    now = Time.now
+    assert 1.second.since >= now + 1
+    now = Time.now
+    assert 1.second.ago >= now - 1
+  end
+
   def test_since_and_ago_with_fractional_days
     t = Time.local(2000)
     # since
@@ -93,10 +109,10 @@ class DurationTest < ActiveSupport::TestCase
     with_env_tz 'US/Eastern' do
       Time.stubs(:now).returns Time.local(2000)
       # since
-      assert_equal false, 5.seconds.since.is_a?(ActiveSupport::TimeWithZone)
+      assert_not_instance_of ActiveSupport::TimeWithZone, 5.seconds.since
       assert_equal Time.local(2000,1,1,0,0,5), 5.seconds.since
       # ago
-      assert_equal false, 5.seconds.ago.is_a?(ActiveSupport::TimeWithZone)
+      assert_not_instance_of ActiveSupport::TimeWithZone, 5.seconds.ago
       assert_equal Time.local(1999,12,31,23,59,55), 5.seconds.ago
     end
   end
@@ -106,11 +122,11 @@ class DurationTest < ActiveSupport::TestCase
     with_env_tz 'US/Eastern' do
       Time.stubs(:now).returns Time.local(2000)
       # since
-      assert_equal true, 5.seconds.since.is_a?(ActiveSupport::TimeWithZone)
+      assert_instance_of ActiveSupport::TimeWithZone, 5.seconds.since
       assert_equal Time.utc(2000,1,1,0,0,5), 5.seconds.since.time
       assert_equal 'Eastern Time (US & Canada)', 5.seconds.since.time_zone.name
       # ago
-      assert_equal true, 5.seconds.ago.is_a?(ActiveSupport::TimeWithZone)
+      assert_instance_of ActiveSupport::TimeWithZone, 5.seconds.ago
       assert_equal Time.utc(1999,12,31,23,59,55), 5.seconds.ago.time
       assert_equal 'Eastern Time (US & Canada)', 5.seconds.ago.time_zone.name
     end
@@ -140,6 +156,11 @@ class DurationTest < ActiveSupport::TestCase
 
   def test_to_json
     assert_equal '172800', 2.days.to_json
+  end
+
+  def test_case_when
+    cased = case 1.day when 1.day then "ok" end
+    assert_equal cased, "ok"
   end
 
   protected

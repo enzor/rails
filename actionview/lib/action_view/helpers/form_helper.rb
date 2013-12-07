@@ -3,9 +3,8 @@ require 'action_view/helpers/date_helper'
 require 'action_view/helpers/tag_helper'
 require 'action_view/helpers/form_tag_helper'
 require 'action_view/helpers/active_model_helper'
-require 'action_view/helpers/tags'
 require 'action_view/model_naming'
-require 'active_support/core_ext/class/attribute_accessors'
+require 'active_support/core_ext/module/attribute_accessors'
 require 'active_support/core_ext/hash/slice'
 require 'active_support/core_ext/string/output_safety'
 require 'active_support/core_ext/string/inflections'
@@ -442,10 +441,11 @@ module ActionView
         object = convert_to_model(object)
 
         as = options[:as]
+        namespace = options[:namespace]
         action, method = object.respond_to?(:persisted?) && object.persisted? ? [:edit, :patch] : [:new, :post]
         options[:html].reverse_merge!(
           class:  as ? "#{action}_#{as}" : dom_class(object, action),
-          id:     as ? "#{action}_#{as}" : [options[:namespace], dom_id(object, action)].compact.join("_").presence,
+          id:     (as ? [namespace, action, as] : [namespace, dom_id(object, action)]).compact.join("_").presence,
           method: method
         )
 
@@ -1172,7 +1172,7 @@ module ActionView
     # methods in the +FormHelper+ module. This class, however, allows you to
     # call methods with the model object you are building the form for.
     #
-    # You can create your own custom FormBuilder templates by subclasses this
+    # You can create your own custom FormBuilder templates by subclassing this
     # class. For example:
     #
     #   class MyFormBuilder < ActionView::Helpers::FormBuilder

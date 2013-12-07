@@ -138,6 +138,8 @@ class Module
   #
   #   Foo.new("Bar").name # raises NoMethodError: undefined method `name'
   #
+  # The target method must be public, otherwise it will raise +NoMethodError+.
+  #
   def delegate(*methods)
     options = methods.pop
     unless options.is_a?(Hash) && to = options[:to]
@@ -192,8 +194,7 @@ class Module
             _ = #{to}                                                                           #   _ = client
             _.#{method}(#{definition})                                                          #   _.name(*args, &block)
           rescue NoMethodError => e                                                             # rescue NoMethodError => e
-            location = "%s:%d:in `%s'" % [__FILE__, __LINE__ - 2, '#{method_prefix}#{method}']  #   location = "%s:%d:in `%s'" % [__FILE__, __LINE__ - 2, 'customer_name']
-            if _.nil? && e.backtrace.first == location                                          #   if _.nil? && e.backtrace.first == location
+            if _.nil? && e.name == :#{method}                                                   #   if _.nil? && e.name == :name
               #{exception}                                                                      #     # add helpful message to the exception
             else                                                                                #   else
               raise                                                                             #     raise

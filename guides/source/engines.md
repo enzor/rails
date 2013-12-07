@@ -104,7 +104,7 @@ At the root of this brand new engine's directory lives a `blorgh.gemspec` file. 
 gem 'blorgh', path: "vendor/engines/blorgh"
 ```
 
-By specifying it as a gem within the `Gemfile`, Bundler will load it as such, parsing this `blorgh.gemspec` file and requiring a file within the `lib` directory called `lib/blorgh.rb`. This file requires the `blorgh/engine.rb` file (located at `lib/blorgh/engine.rb`) and defines a base module called `Blorgh`.
+Don't forget to run `bundle install` as usual. By specifying it as a gem within the `Gemfile`, Bundler will load it as such, parsing this `blorgh.gemspec` file and requiring a file within the `lib` directory called `lib/blorgh.rb`. This file requires the `blorgh/engine.rb` file (located at `lib/blorgh/engine.rb`) and defines a base module called `Blorgh`.
 
 ```ruby
 require "blorgh/engine"
@@ -253,7 +253,7 @@ The helper inside `app/helpers/blorgh/posts_helper.rb` is also namespaced:
 
 ```ruby
 module Blorgh
-  class PostsHelper
+  module PostsHelper
     ...
   end
 end
@@ -307,7 +307,11 @@ create      test/models/blorgh/comment_test.rb
 create      test/fixtures/blorgh/comments.yml
 ```
 
-This generator call will generate just the necessary model files it needs, namespacing the files under a `blorgh` directory and creating a model class called `Blorgh::Comment`.
+This generator call will generate just the necessary model files it needs, namespacing the files under a `blorgh` directory and creating a model class called `Blorgh::Comment`. Now run the migration to create our blorgh_comments table:
+
+```bash
+$ rake db:migrate
+```
 
 To show the comments on a post, edit `app/views/blorgh/posts/show.html.erb` and add this line before the "Edit" link:
 
@@ -399,9 +403,9 @@ def create
 end
 
 private
-def comment_params
-  params.require(:comment).permit(:text)
-end
+  def comment_params
+    params.require(:comment).permit(:text)
+  end
 ```
 
 This is the final part required to get the new comment form working. Displaying the comments however, is not quite right yet. If you were to create a comment right now you would see this error:
@@ -466,7 +470,7 @@ NOTE: Other engines, such as Devise, handle this a little differently by making 
 The engine contains migrations for the `blorgh_posts` and `blorgh_comments` table which need to be created in the application's database so that the engine's models can query them correctly. To copy these migrations into the application use this command:
 
 ```bash
-$ rake blorgh_engine:install:migrations
+$ rake blorgh:install:migrations
 ```
 
 If you have multiple engines that need migrations copied over, use `railties:install:migrations` instead:
@@ -579,7 +583,7 @@ Run this migration using this command:
 $ rake db:migrate
 ```
 
-Now with all the pieces in place, an action will take place that will associate an author — represented by a record in the `users` table — with a post, represented by the `blorgh_posts` table from the engine.
+Now with all the pieces in place, an action will take place that will associate an author - represented by a record in the `users` table - with a post, represented by the `blorgh_posts` table from the engine.
 
 Finally, the author's name should be displayed on the post's page. Add this code above the "Title" output inside `app/views/blorgh/posts/show.html.erb`:
 
@@ -689,8 +693,8 @@ There are now no strict dependencies on what the class is, only what the API for
 
 Within an engine, there may come a time where you wish to use things such as initializers, internationalization or other configuration options. The great news is that these things are entirely possible because a Rails engine shares much the same functionality as a Rails application. In fact, a Rails application's functionality is actually a superset of what is provided by engines!
 
-If you wish to use an initializer — code that should run before the engine is
-loaded — the place for it is the `config/initializers` folder. This directory's
+If you wish to use an initializer - code that should run before the engine is
+loaded - the place for it is the `config/initializers` folder. This directory's
 functionality is explained in the
 [Initializers section](configuring.html#initializers) of the Configuring guide,
 and works precisely the same way as the `config/initializers` directory inside
@@ -707,7 +711,7 @@ The `test` directory should be treated like a typical Rails testing environment,
 
 ### Functional tests
 
-A matter worth taking into consideration when writing functional tests is that the tests are going to be running on an application — the `test/dummy` application — rather than your engine. This is due to the setup of the testing environment; an engine needs an application as a host for testing its main functionality, especially controllers. This means that if you were to make a typical `GET` to a controller in a controller's functional test like this:
+A matter worth taking into consideration when writing functional tests is that the tests are going to be running on an application - the `test/dummy` application - rather than your engine. This is due to the setup of the testing environment; an engine needs an application as a host for testing its main functionality, especially controllers. This means that if you were to make a typical `GET` to a controller in a controller's functional test like this:
 
 ```ruby
 get :index
@@ -850,7 +854,6 @@ module Blorgh::Concerns::Models::Post
     before_save :set_author
 
     private
-
       def set_author
         self.author = User.find_or_create_by(name: author_name)
       end
@@ -872,7 +875,7 @@ end
 
 When Rails looks for a view to render, it will first look in the `app/views` directory of the application. If it cannot find the view there, then it will check in the `app/views` directories of all engines which have this directory.
 
-In the `blorgh` engine, there is a currently a file at `app/views/blorgh/posts/index.html.erb`. When the engine is asked to render the view for `Blorgh::PostsController`'s `index` action, it will first see if it can find it at `app/views/blorgh/posts/index.html.erb` within the application and then if it cannot it will look inside the engine.
+When the application is asked to render the view for `Blorgh::PostsController`'s index action, it will look the path `app/views/blorgh/posts/index.html.erb`, first within the application. If it cannot find it, it will look inside the engine.
 
 You can override this view in the application by simply creating a new file at `app/views/blorgh/posts/index.html.erb`. Then you can completely change what this view would normally output.
 
@@ -951,7 +954,7 @@ INFO. Remember that in order to use languages like Sass or CoffeeScript, you sho
 
 There are some situations where your engine's assets are not required by the host application. For example, say that you've created
 an admin functionality that only exists for your engine. In this case, the host application doesn't need to require `admin.css`
-or `admin.js`. Only the gem's admin layout needs these assets. It doesn't make sense for the host app to include `"blorg/admin.css"` in it's stylesheets. In this situation, you should explicitly define these assets for precompilation.
+or `admin.js`. Only the gem's admin layout needs these assets. It doesn't make sense for the host app to include `"blorgh/admin.css"` in it's stylesheets. In this situation, you should explicitly define these assets for precompilation.
 This tells sprockets to add your engine assets when `rake assets:precompile` is ran.
 
 You can define assets for precompilation in `engine.rb`

@@ -1,4 +1,10 @@
 class Post < ActiveRecord::Base
+  class CategoryPost < ActiveRecord::Base
+    self.table_name = "categories_posts"
+    belongs_to :category
+    belongs_to :post
+  end
+
   module NamedExtension
     def author
       'lifo'
@@ -59,6 +65,9 @@ class Post < ActiveRecord::Base
   has_many :author_favorites, :through => :author
   has_many :author_categorizations, :through => :author, :source => :categorizations
   has_many :author_addresses, :through => :author
+  has_many :author_address_extra_with_address,
+    through: :author_with_address,
+    source: :author_address_extra
 
   has_many :comments_with_interpolated_conditions,
     ->(p) { where "#{"#{p.aliased_table_name}." rescue ""}body = ?", 'Thank you for the welcome' },
@@ -72,6 +81,8 @@ class Post < ActiveRecord::Base
   has_many :special_comments_ratings, :through => :special_comments, :source => :ratings
   has_many :special_comments_ratings_taggings, :through => :special_comments_ratings, :source => :taggings
 
+  has_many :category_posts, :class_name => 'CategoryPost'
+  has_many :scategories, through: :category_posts, source: :category
   has_and_belongs_to_many :categories
   has_and_belongs_to_many :special_categories, :join_table => "categories_posts", :association_foreign_key => 'category_id'
 

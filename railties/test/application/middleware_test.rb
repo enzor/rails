@@ -61,7 +61,7 @@ module ApplicationTests
 
       boot!
 
-      assert_equal "Rack::Cache", middleware.first
+      assert middleware.include?("Rack::Cache")
     end
 
     test "ActiveRecord::Migration::CheckPending is present when active_record.migration_error is set to :page_load" do
@@ -142,6 +142,12 @@ module ApplicationTests
       add_to_config "config.middleware.insert_after Rack::Sendfile, Rack::Config"
       boot!
       assert_equal "Rack::Config", middleware.second
+    end
+
+    test 'unshift middleware' do
+      add_to_config 'config.middleware.unshift Rack::Config'
+      boot!
+      assert_equal 'Rack::Config', middleware.first
     end
 
     test "Rails.cache does not respond to middleware" do

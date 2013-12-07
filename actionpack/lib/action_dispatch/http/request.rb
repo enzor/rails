@@ -18,7 +18,6 @@ module ActionDispatch
     include ActionDispatch::Http::MimeNegotiation
     include ActionDispatch::Http::Parameters
     include ActionDispatch::Http::FilterParameters
-    include ActionDispatch::Http::Upload
     include ActionDispatch::Http::URL
 
     autoload :Session, 'action_dispatch/request/session'
@@ -272,7 +271,7 @@ module ActionDispatch
 
     # Override Rack's GET method to support indifferent access
     def GET
-      @env["action_dispatch.request.query_parameters"] ||= (normalize_encode_params(super) || {})
+      @env["action_dispatch.request.query_parameters"] ||= Utils.deep_munge((normalize_encode_params(super) || {}))
     rescue TypeError => e
       raise ActionController::BadRequest.new(:query, e)
     end
@@ -280,7 +279,7 @@ module ActionDispatch
 
     # Override Rack's POST method to support indifferent access
     def POST
-      @env["action_dispatch.request.request_parameters"] ||= (normalize_encode_params(super) || {})
+      @env["action_dispatch.request.request_parameters"] ||= Utils.deep_munge((normalize_encode_params(super) || {}))
     rescue TypeError => e
       raise ActionController::BadRequest.new(:request, e)
     end
@@ -300,17 +299,24 @@ module ActionDispatch
       LOCALHOST =~ remote_addr && LOCALHOST =~ remote_ip
     end
 
-    protected
+    # Extracted into ActionDispatch::Request::Utils.deep_munge, but kept here for backwards compatibility.
+    def deep_munge(hash)
+      ActiveSupport::Deprecation.warn(
+        "This method has been extracted into ActionDispatch::Request::Utils.deep_munge. Please start using that instead."
+      )
 
-    def parse_query(qs)
-      Utils.deep_munge(super)
+      Utils.deep_munge(hash)
     end
+
+    protected
+      def parse_query(qs)
+        Utils.deep_munge(super)
+      end
 
     private
-
-    def check_method(name)
-      HTTP_METHOD_LOOKUP[name] || raise(ActionController::UnknownHttpMethod, "#{name}, accepted HTTP methods are #{HTTP_METHODS.to_sentence(:locale => :en)}")
-      name
-    end
+      def check_method(name)
+        HTTP_METHOD_LOOKUP[name] || raise(ActionController::UnknownHttpMethod, "#{name}, accepted HTTP methods are #{HTTP_METHODS.to_sentence(:locale => :en)}")
+        name
+      end
   end
 end

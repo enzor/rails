@@ -70,10 +70,11 @@ class InflectorTest < ActiveSupport::TestCase
 
 
   def test_overwrite_previous_inflectors
-    assert_equal("series", ActiveSupport::Inflector.singularize("series"))
-    ActiveSupport::Inflector.inflections.singular "series", "serie"
-    assert_equal("serie", ActiveSupport::Inflector.singularize("series"))
-    ActiveSupport::Inflector.inflections.uncountable "series" # Return to normal
+    with_dup do
+      assert_equal("series", ActiveSupport::Inflector.singularize("series"))
+      ActiveSupport::Inflector.inflections.singular "series", "serie"
+      assert_equal("serie", ActiveSupport::Inflector.singularize("series"))
+    end
   end
 
   MixtureToTitleCase.each_with_index do |(before, titleized), index|
@@ -230,25 +231,35 @@ class InflectorTest < ActiveSupport::TestCase
     end
   end
 
+# FIXME: get following tests to pass on jruby, currently skipped
+#
+# Currently this fails because ActiveSupport::Multibyte::Unicode#tidy_bytes
+# required a specific Encoding::Converter(UTF-8 to UTF8-MAC) which unavailable on JRuby
+# causing our tests to error out.
+# related bug http://jira.codehaus.org/browse/JRUBY-7194
   def test_parameterize
+    jruby_skip "UTF-8 to UTF8-MAC Converter is unavailable"
     StringToParameterized.each do |some_string, parameterized_string|
       assert_equal(parameterized_string, ActiveSupport::Inflector.parameterize(some_string))
     end
   end
 
   def test_parameterize_and_normalize
+    jruby_skip "UTF-8 to UTF8-MAC Converter is unavailable"
     StringToParameterizedAndNormalized.each do |some_string, parameterized_string|
       assert_equal(parameterized_string, ActiveSupport::Inflector.parameterize(some_string))
     end
   end
 
   def test_parameterize_with_custom_separator
+    jruby_skip "UTF-8 to UTF8-MAC Converter is unavailable"
     StringToParameterizeWithUnderscore.each do |some_string, parameterized_string|
       assert_equal(parameterized_string, ActiveSupport::Inflector.parameterize(some_string, '_'))
     end
   end
 
   def test_parameterize_with_multi_character_separator
+    jruby_skip "UTF-8 to UTF8-MAC Converter is unavailable"
     StringToParameterized.each do |some_string, parameterized_string|
       assert_equal(parameterized_string.gsub('-', '__sep__'), ActiveSupport::Inflector.parameterize(some_string, '__sep__'))
     end
@@ -274,6 +285,12 @@ class InflectorTest < ActiveSupport::TestCase
   def test_humanize
     UnderscoreToHuman.each do |underscore, human|
       assert_equal(human, ActiveSupport::Inflector.humanize(underscore))
+    end
+  end
+
+  def test_humanize_without_capitalize
+    UnderscoreToHumanWithoutCapitalize.each do |underscore, human|
+      assert_equal(human, ActiveSupport::Inflector.humanize(underscore, capitalize: false))
     end
   end
 
